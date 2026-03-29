@@ -1,0 +1,911 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Nourish</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+  <style>
+    html, body, #root { margin: 0; padding: 0; background: #F7F5F2; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel">
+    const { useState, useMemo } = React;
+
+const PEOPLE = {
+  ambar: {
+    name: "Ambar", target: 1780, label: "gentle deficit", protein: "75g",
+    meals: [
+      { name: "Breakfast", portion: "4 Weetbix + oat milk, or 2 slices toast + 1.5 tbsp PB", kcal: 400 },
+      { name: "Lunch", portion: "2 cups salad + ½ can beans + 100g tofu", kcal: 460 },
+      { name: "Dinner", portion: "80g pasta / 150g tofu / 60g noodles (see plan)", kcal: 580 },
+    ]
+  },
+  cam: {
+    name: "Cam", target: 3050, label: "maintenance", protein: "110g",
+    meals: [
+      { name: "Breakfast", portion: "7 Weetbix + oat milk + banana, or 4 slices toast + 3 tbsp PB", kcal: 650 },
+      { name: "Lunch", portion: "3 cups salad + 1 full can beans + 200g tofu", kcal: 720 },
+      { name: "Dinner", portion: "130g pasta / 250g tofu / 100g noodles (see plan)", kcal: 950 },
+      { name: "Snacks", portion: "40g mixed nuts + 1–2 pieces fruit", kcal: 350 },
+    ]
+  }
+};
+
+// Every recipe has ingredients: [{ name, note }]
+// The shopping list is built dynamically from active meal ingredients
+
+const SWAP_LIBRARY = {
+  breakfast: [
+    {
+      name: "Smoothie bowl", desc: "Blend frozen banana + oat milk + PB. Pour into bowl. Top with granola, sliced banana, chia seeds. 5 min.", ambarKcal: 420, camKcal: 650,
+      ambarPortion: ["1 small bowl", "+ 1 tbsp PB"], camPortion: ["1 large bowl", "+ 2 tbsp PB"],
+      ingredients: [{ name: "Frozen banana", note: "" }, { name: "Oat milk", note: "" }, { name: "Peanut butter", note: "" }, { name: "Granola", note: "" }, { name: "Chia seeds", note: "" }],
+    },
+    {
+      name: "Tofu scramble on toast", desc: "Crumble firm tofu into a pan with turmeric, soy sauce, garlic paste. Serve on wholegrain toast. 10 min.", ambarKcal: 400, camKcal: 660,
+      ambarPortion: ["100g tofu", "2 slices toast"], camPortion: ["200g tofu", "4 slices toast"],
+      ingredients: [{ name: "Firm tofu", note: "×1 block" }, { name: "Wholegrain bread", note: "" }, { name: "Turmeric", note: "pantry" }, { name: "Soy sauce", note: "pantry" }, { name: "Garlic paste", note: "tube" }],
+    },
+    {
+      name: "Chia pudding", desc: "Mix chia seeds + oat milk the night before. Top with banana and PB in the morning. Zero morning effort.", ambarKcal: 390, camKcal: 620,
+      ambarPortion: ["3 tbsp chia", "+ 1 cup oat milk", "1 banana"], camPortion: ["5 tbsp chia", "+ 1.5 cups oat milk", "2 bananas"],
+      ingredients: [{ name: "Chia seeds", note: "" }, { name: "Oat milk", note: "" }, { name: "Bananas", note: "" }, { name: "Peanut butter", note: "" }],
+    },
+    {
+      name: "Muesli with oat milk", desc: "Store-bought muesli with So Good oat milk. Add banana or whatever fruit is around. Pour and eat.", ambarKcal: 410, camKcal: 640,
+      ambarPortion: ["¾ cup muesli", "+ oat milk"], camPortion: ["1.5 cups muesli", "+ oat milk + banana"],
+      ingredients: [{ name: "Muesli", note: "big bag" }, { name: "Oat milk", note: "" }, { name: "Bananas", note: "" }],
+    },
+  ],
+  lunch: [
+    {
+      name: "Rice paper rolls", desc: "Soak rice paper, fill with vermicelli noodles, tofu, carrot, cucumber, lettuce. Dip in soy + lime sauce. Assembly only.", ambarKcal: 440, camKcal: 700,
+      ambarPortion: ["4 rolls", "100g tofu"], camPortion: ["6 rolls", "200g tofu"],
+      ingredients: [{ name: "Rice paper sheets", note: "" }, { name: "Rice vermicelli noodles", note: "" }, { name: "Firm tofu", note: "×1 block" }, { name: "Shredded carrot", note: "pre-cut bag" }, { name: "Cucumber", note: "" }, { name: "Bag salad mix", note: "×1" }, { name: "Lime", note: "×1" }],
+    },
+    {
+      name: "Grain bowl with tahini", desc: "Microwave rice pouch + canned chickpeas + bag salad + drizzle of tahini + lemon + soy. Done in 5 min.", ambarKcal: 480, camKcal: 740,
+      ambarPortion: ["1 rice pouch", "½ can chickpeas", "2 cups salad"], camPortion: ["2 rice pouches", "1 full can chickpeas", "3 cups salad"],
+      ingredients: [{ name: "Microwave rice pouches", note: "×2" }, { name: "Canned chickpeas", note: "×2 tins" }, { name: "Bag salad mix", note: "×1" }, { name: "Tahini", note: "" }, { name: "Lemon", note: "×1" }],
+    },
+    {
+      name: "Miso soup + tofu + rice", desc: "Dissolve miso paste in hot water, add cubed silken tofu. Serve alongside a microwave rice pouch.", ambarKcal: 430, camKcal: 690,
+      ambarPortion: ["1 bowl miso soup", "100g tofu", "1 rice pouch"], camPortion: ["1 bowl miso soup", "200g tofu", "2 rice pouches"],
+      ingredients: [{ name: "Miso paste", note: "" }, { name: "Silken tofu", note: "×1 pack" }, { name: "Microwave rice pouches", note: "×2" }],
+    },
+    {
+      name: "Noodle salad jar", desc: "Cold vermicelli noodles + shredded carrot + cucumber + edamame + soy sesame dressing. Prep in 5 min.", ambarKcal: 450, camKcal: 710,
+      ambarPortion: ["60g dry noodles", "½ cup edamame"], camPortion: ["100g dry noodles", "1 cup edamame"],
+      ingredients: [{ name: "Rice vermicelli noodles", note: "" }, { name: "Shredded carrot", note: "pre-cut bag" }, { name: "Cucumber", note: "" }, { name: "Frozen edamame", note: "" }, { name: "Sesame oil", note: "pantry" }],
+    },
+    {
+      name: "TVP tacos", desc: "Rehydrate TVP in stock + taco spice. Serve in small tortillas with avocado, salsa, cabbage. 15 min.", ambarKcal: 470, camKcal: 730,
+      ambarPortion: ["3 tacos", "½ avo"], camPortion: ["5 tacos", "1 full avo"],
+      ingredients: [{ name: "TVP", note: "dry" }, { name: "Veggie stock", note: "" }, { name: "Taco spice", note: "" }, { name: "Small tortillas", note: "" }, { name: "Avocados", note: "×2" }, { name: "Salsa", note: "jarred" }],
+    },
+  ],
+  dinner: [
+    {
+      name: "Miso eggplant with rice", desc: "Halve eggplant, brush with miso + sesame oil + soy, roast 25 min. Serve over microwave rice. Minimal prep.", ambarKcal: 560, camKcal: 900,
+      ambarPortion: ["1 eggplant half", "1 rice pouch"], camPortion: ["2 eggplant halves", "2 rice pouches"],
+      ingredients: [{ name: "Eggplant", note: "×2" }, { name: "Miso paste", note: "" }, { name: "Sesame oil", note: "pantry" }, { name: "Microwave rice pouches", note: "×4" }],
+    },
+    {
+      name: "Peanut noodles with tofu", desc: "Cook noodles. Toss with peanut butter + soy + lime + garlic paste + chilli. Top with pan-fried tofu. 20 min.", ambarKcal: 590, camKcal: 960,
+      ambarPortion: ["80g dry noodles", "150g tofu"], camPortion: ["130g dry noodles", "250g tofu"],
+      ingredients: [{ name: "Noodles", note: "any kind" }, { name: "Firm tofu", note: "×2 blocks" }, { name: "Peanut butter", note: "" }, { name: "Lime", note: "×2" }, { name: "Chilli flakes", note: "pantry" }],
+    },
+    {
+      name: "Lentil coconut curry", desc: "Canned red lentils + coconut milk + curry paste + frozen spinach. Simmer 20 min. Serve with microwave rice. One pot.", ambarKcal: 600, camKcal: 970,
+      ambarPortion: ["1.5 ladles curry", "1 rice pouch"], camPortion: ["2.5 ladles curry", "2 rice pouches"],
+      ingredients: [{ name: "Canned red lentils", note: "×2 tins" }, { name: "Coconut milk", note: "×2 tins" }, { name: "Curry paste", note: "jarred" }, { name: "Frozen spinach", note: "" }, { name: "Microwave rice pouches", note: "×4" }],
+    },
+    {
+      name: "Teriyaki tofu rice bowl", desc: "Pan-fry tofu in bottled teriyaki sauce until caramelised. Serve over rice with steamed frozen veg. 15 min.", ambarKcal: 570, camKcal: 930,
+      ambarPortion: ["150g tofu", "1 rice pouch", "1.5 cups veg"], camPortion: ["250g tofu", "2 rice pouches", "2 cups veg"],
+      ingredients: [{ name: "Firm tofu", note: "×2 blocks" }, { name: "Teriyaki sauce", note: "bottled" }, { name: "Microwave rice pouches", note: "×4" }, { name: "Frozen stir fry veg", note: "×1 bag" }],
+    },
+    {
+      name: "Pasta aglio e olio with white beans", desc: "Pasta + olive oil + garlic paste + chilli flakes + canned white beans + parsley. 20 min. Dead simple.", ambarKcal: 600, camKcal: 960,
+      ambarPortion: ["80g dry pasta", "½ can white beans"], camPortion: ["130g dry pasta", "1 full can white beans"],
+      ingredients: [{ name: "Pasta", note: "large bag" }, { name: "Canned white beans", note: "×2 tins" }, { name: "Olive oil", note: "pantry" }, { name: "Chilli flakes", note: "pantry" }, { name: "Parsley", note: "fresh or dried" }],
+    },
+    {
+      name: "Vietnamese tofu noodle soup", desc: "Veggie stock + soy + star anise + ginger paste + rice noodles + tofu. Simmer 15 min. Top with fresh herbs.", ambarKcal: 520, camKcal: 850,
+      ambarPortion: ["60g dry noodles", "150g tofu", "1 bowl broth"], camPortion: ["100g dry noodles", "250g tofu", "1 bowl broth"],
+      ingredients: [{ name: "Veggie stock", note: "×2 cartons" }, { name: "Rice noodles", note: "" }, { name: "Firm tofu", note: "×2 blocks" }, { name: "Ginger paste", note: "tube" }, { name: "Star anise", note: "pantry" }],
+    },
+    {
+      name: "Black bean rice bowl", desc: "Canned black beans + cumin + garlic paste, warmed through. Serve over rice with avo, corn, lime. 10 min.", ambarKcal: 570, camKcal: 920,
+      ambarPortion: ["½ can black beans", "1 rice pouch", "½ avo"], camPortion: ["1 full can black beans", "2 rice pouches", "1 full avo"],
+      ingredients: [{ name: "Canned black beans", note: "×2 tins" }, { name: "Cumin", note: "pantry" }, { name: "Microwave rice pouches", note: "×4" }, { name: "Avocados", note: "×2" }, { name: "Lime", note: "×2" }],
+    },
+    {
+      name: "Soba noodles with edamame", desc: "Cook soba noodles. Toss with soy + sesame oil + rice vinegar + frozen edamame. Serve cold or warm. 15 min.", ambarKcal: 540, camKcal: 880,
+      ambarPortion: ["80g dry soba", "½ cup edamame"], camPortion: ["130g dry soba", "1 cup edamame"],
+      ingredients: [{ name: "Soba noodles", note: "" }, { name: "Frozen edamame", note: "" }, { name: "Rice vinegar", note: "pantry" }, { name: "Sesame oil", note: "pantry" }],
+    },
+  ]
+};
+
+// Base ingredients always on the list, keyed by meal tag
+const BASE_INGREDIENTS = {
+  "Breakfast — Option A": [
+    { name: "Weetbix high protein", note: "big box" },
+    { name: "So Good high protein oat milk", note: "2–3 litres" },
+    { name: "Bananas", note: "" },
+  ],
+  "Breakfast — Option B": [
+    { name: "Wholegrain bread", note: "" },
+    { name: "Peanut butter", note: "big jar" },
+    { name: "Avocados", note: "×3–4" },
+    { name: "So Good high protein oat milk", note: "1 litre" },
+  ],
+  "Lunch — every day": [
+    { name: "Bag salad mix", note: "×2" },
+    { name: "Cucumber", note: "" },
+    { name: "Shredded carrot", note: "pre-cut bag" },
+    { name: "Firm tofu", note: "×3 blocks" },
+    { name: "Canned beans", note: "×3 tins" },
+    { name: "TVP", note: "dry, pantry" },
+  ],
+  "Dinner — Mon & Tue · Italian": [
+    { name: "Pasta", note: "large bag" },
+    { name: "Jarred passata", note: "×2" },
+    { name: "Garlic paste", note: "tube" },
+    { name: "Veggie stock", note: "for TVP" },
+    { name: "TVP", note: "dry" },
+  ],
+  "Dinner — Wed & Thu · Asian": [
+    { name: "Firm tofu", note: "×2 blocks" },
+    { name: "Frozen stir fry veg", note: "×2 bags" },
+    { name: "Microwave rice pouches", note: "×4" },
+    { name: "Bottled stir fry sauce", note: "teriyaki or satay" },
+  ],
+  "Dinner — Fri & Sat · Vietnamese": [
+    { name: "Rice vermicelli noodles", note: "" },
+    { name: "Firm tofu", note: "×2 blocks" },
+    { name: "Bag salad mix", note: "×1" },
+    { name: "Cucumber", note: "" },
+    { name: "Shredded carrot", note: "pre-cut bag" },
+    { name: "Lime", note: "×2" },
+  ],
+  "Cam's snacks — daily": [
+    { name: "Mixed nuts", note: "large bag" },
+    { name: "Extra fruit", note: "" },
+  ],
+};
+
+// Always-present pantry items
+const PANTRY = [
+  { name: "Soy sauce", note: "pantry" },
+  { name: "Sesame oil", note: "pantry" },
+  { name: "Garlic paste", note: "tube" },
+];
+
+// Woolworths online category mapping for each ingredient name
+const WOOLIES_CATS = {
+  // Bakery
+  "Wholegrain bread":           "Bakery",
+  "Small tortillas":            "Bakery",
+  // Breakfast & Cereal
+  "Weetbix high protein":       "Breakfast & Cereal",
+  "Muesli":                     "Breakfast & Cereal",
+  "Granola":                    "Breakfast & Cereal",
+  "Oats":                       "Breakfast & Cereal",
+  // Dairy & Eggs (plant-based alternatives)
+  "So Good high protein oat milk": "Dairy & Eggs",
+  "Oat milk":                   "Dairy & Eggs",
+  // Deli & Chilled
+  "Firm tofu":                  "Deli & Chilled",
+  "Silken tofu":                "Deli & Chilled",
+  // Pantry — Canned & Packaged
+  "Canned beans":               "Pantry — Canned",
+  "Canned chickpeas":           "Pantry — Canned",
+  "Canned black beans":         "Pantry — Canned",
+  "Canned white beans":         "Pantry — Canned",
+  "Canned red lentils":         "Pantry — Canned",
+  "Jarred passata":             "Pantry — Canned",
+  "Coconut milk":               "Pantry — Canned",
+  "Salsa":                      "Pantry — Canned",
+  "Veggie stock":               "Pantry — Canned",
+  // Pantry — Dry Goods
+  "Pasta":                      "Pantry — Dry Goods",
+  "Rice vermicelli noodles":    "Pantry — Dry Goods",
+  "Rice noodles":               "Pantry — Dry Goods",
+  "Soba noodles":               "Pantry — Dry Goods",
+  "Noodles":                    "Pantry — Dry Goods",
+  "TVP":                        "Pantry — Dry Goods",
+  "Chia seeds":                 "Pantry — Dry Goods",
+  "Rice paper sheets":          "Pantry — Dry Goods",
+  // Pantry — Condiments & Sauces
+  "Peanut butter":              "Pantry — Condiments",
+  "Soy sauce":                  "Pantry — Condiments",
+  "Sesame oil":                 "Pantry — Condiments",
+  "Garlic paste":               "Pantry — Condiments",
+  "Ginger paste":               "Pantry — Condiments",
+  "Tahini":                     "Pantry — Condiments",
+  "Miso paste":                 "Pantry — Condiments",
+  "Curry paste":                "Pantry — Condiments",
+  "Teriyaki sauce":             "Pantry — Condiments",
+  "Bottled stir fry sauce":     "Pantry — Condiments",
+  "Olive oil":                  "Pantry — Condiments",
+  "Rice vinegar":               "Pantry — Condiments",
+  "Taco spice":                 "Pantry — Condiments",
+  // Pantry — Spices & Herbs
+  "Turmeric":                   "Pantry — Spices",
+  "Cumin":                      "Pantry — Spices",
+  "Chilli flakes":              "Pantry — Spices",
+  "Star anise":                 "Pantry — Spices",
+  "Italian herbs":              "Pantry — Spices",
+  "Parsley":                    "Pantry — Spices",
+  // Frozen
+  "Frozen stir fry veg":        "Frozen",
+  "Frozen spinach":             "Frozen",
+  "Frozen edamame":             "Frozen",
+  "Frozen banana":              "Frozen",
+  "Microwave rice pouches":     "Frozen",
+  // Fruit & Veg
+  "Bananas":                    "Fruit & Veg",
+  "Avocados":                   "Fruit & Veg",
+  "Cucumber":                   "Fruit & Veg",
+  "Shredded carrot":            "Fruit & Veg",
+  "Bag salad mix":              "Fruit & Veg",
+  "Eggplant":                   "Fruit & Veg",
+  "Lime":                       "Fruit & Veg",
+  "Lemon":                      "Fruit & Veg",
+  "Extra fruit":                "Fruit & Veg",
+  // Snacks & Nuts
+  "Mixed nuts":                 "Snacks & Nuts",
+};
+
+const WOOLIES_CAT_ORDER = [
+  "Fruit & Veg",
+  "Deli & Chilled",
+  "Dairy & Eggs",
+  "Bakery",
+  "Breakfast & Cereal",
+  "Pantry — Canned",
+  "Pantry — Dry Goods",
+  "Pantry — Condiments",
+  "Pantry — Spices",
+  "Frozen",
+  "Snacks & Nuts",
+  "Other",
+];
+
+// Coles online category mapping
+// Key difference: tofu lives in Deli, Asian pantry items in Dietary & World Foods
+const COLES_CATS = {
+  // Fruit & Vegetables
+  "Bananas":                    "Fruit & Vegetables",
+  "Avocados":                   "Fruit & Vegetables",
+  "Cucumber":                   "Fruit & Vegetables",
+  "Shredded carrot":            "Fruit & Vegetables",
+  "Bag salad mix":              "Fruit & Vegetables",
+  "Eggplant":                   "Fruit & Vegetables",
+  "Lime":                       "Fruit & Vegetables",
+  "Lemon":                      "Fruit & Vegetables",
+  "Extra fruit":                "Fruit & Vegetables",
+  // Dairy, Eggs & Fridge
+  "So Good high protein oat milk": "Dairy, Eggs & Fridge",
+  "Oat milk":                   "Dairy, Eggs & Fridge",
+  // Deli
+  "Firm tofu":                  "Deli",
+  "Silken tofu":                "Deli",
+  // Bakery
+  "Wholegrain bread":           "Bakery",
+  "Small tortillas":            "Bakery",
+  // Pantry — Breakfast & Spreads
+  "Weetbix high protein":       "Pantry — Breakfast",
+  "Muesli":                     "Pantry — Breakfast",
+  "Granola":                    "Pantry — Breakfast",
+  "Chia seeds":                 "Pantry — Breakfast",
+  "Peanut butter":              "Pantry — Breakfast",
+  // Pantry — Canned & Packaged
+  "Canned beans":               "Pantry — Canned",
+  "Canned chickpeas":           "Pantry — Canned",
+  "Canned black beans":         "Pantry — Canned",
+  "Canned white beans":         "Pantry — Canned",
+  "Canned red lentils":         "Pantry — Canned",
+  "Jarred passata":             "Pantry — Canned",
+  "Coconut milk":               "Pantry — Canned",
+  "Salsa":                      "Pantry — Canned",
+  "Veggie stock":               "Pantry — Canned",
+  // Pantry — Dry Goods
+  "Pasta":                      "Pantry — Dry Goods",
+  "Olive oil":                  "Pantry — Dry Goods",
+  // Pantry — Herbs & Spices
+  "Turmeric":                   "Pantry — Spices",
+  "Cumin":                      "Pantry — Spices",
+  "Chilli flakes":              "Pantry — Spices",
+  "Star anise":                 "Pantry — Spices",
+  "Italian herbs":              "Pantry — Spices",
+  "Parsley":                    "Pantry — Spices",
+  "Taco spice":                 "Pantry — Spices",
+  "Garlic paste":               "Pantry — Spices",
+  // Dietary & World Foods (Asian/specialty items)
+  "Rice vermicelli noodles":    "Dietary & World Foods",
+  "Rice noodles":               "Dietary & World Foods",
+  "Soba noodles":               "Dietary & World Foods",
+  "Noodles":                    "Dietary & World Foods",
+  "Rice paper sheets":          "Dietary & World Foods",
+  "TVP":                        "Dietary & World Foods",
+  "Soy sauce":                  "Dietary & World Foods",
+  "Sesame oil":                 "Dietary & World Foods",
+  "Ginger paste":               "Dietary & World Foods",
+  "Miso paste":                 "Dietary & World Foods",
+  "Tahini":                     "Dietary & World Foods",
+  "Curry paste":                "Dietary & World Foods",
+  "Teriyaki sauce":             "Dietary & World Foods",
+  "Bottled stir fry sauce":     "Dietary & World Foods",
+  "Rice vinegar":               "Dietary & World Foods",
+  // Frozen
+  "Frozen stir fry veg":        "Frozen",
+  "Frozen spinach":             "Frozen",
+  "Frozen edamame":             "Frozen",
+  "Frozen banana":              "Frozen",
+  "Microwave rice pouches":     "Frozen",
+  // Snacks
+  "Mixed nuts":                 "Snacks",
+};
+
+const COLES_CAT_ORDER = [
+  "Fruit & Vegetables",
+  "Deli",
+  "Dairy, Eggs & Fridge",
+  "Bakery",
+  "Pantry — Breakfast",
+  "Pantry — Canned",
+  "Pantry — Dry Goods",
+  "Pantry — Spices",
+  "Dietary & World Foods",
+  "Frozen",
+  "Snacks",
+  "Other",
+];
+
+const MEALS_DATA = [
+  {
+    tag: "Breakfast — Option A", name: "Weetbix + oat milk",
+    ambarKcal: 400, camKcal: 650,
+    desc: "Open box. Pour milk. Eat. Add banana or berries. Zero effort.",
+    ambarPortion: ["4 biscuits", "+ oat milk"],
+    camPortion: ["7 biscuits", "+ oat milk + banana"],
+    tip: null, swapType: "breakfast",
+  },
+  {
+    tag: "Breakfast — Option B", name: "Toast with peanut butter or avo",
+    ambarKcal: 380, camKcal: 650,
+    desc: "Wholegrain toast. PB for protein, or smashed avo + salt. Three minutes.",
+    ambarPortion: ["2 slices", "+ 1.5 tbsp PB"],
+    camPortion: ["4 slices", "+ 3 tbsp PB"],
+    tip: null, swapType: "breakfast",
+  },
+  {
+    tag: "Lunch — every day", name: "Big salad + beans + tofu or TVP",
+    ambarKcal: 460, camKcal: 720,
+    desc: "Bag salad + canned beans + tofu straight from pack, or rehydrated TVP. Dress: soy sauce, sesame oil, rice vinegar. No cooking.",
+    ambarPortion: ["2 cups salad", "½ can beans", "100g tofu"],
+    camPortion: ["3 cups salad", "1 full can beans", "200g tofu"],
+    tip: null, swapType: "lunch",
+  },
+  {
+    tag: "Dinner — Mon & Tue · Italian", name: "Pasta with TVP bolognese",
+    ambarKcal: 620, camKcal: 980,
+    desc: "TVP in veggie stock + jarred passata + Italian herbs + garlic paste. Simmer 15 min. Big pot Monday. Tuesday is just reheat.",
+    ambarPortion: ["80g dry pasta", "1.5 ladles sauce"],
+    camPortion: ["130g dry pasta", "2.5 ladles sauce"],
+    tip: "Passata only — no fresh tomato. Cam-safe ✓", swapType: "dinner",
+  },
+  {
+    tag: "Dinner — Wed & Thu · Asian", name: "Tofu stir fry with rice",
+    ambarKcal: 580, camKcal: 950,
+    desc: "Firm tofu + frozen stir fry veg bag + bottled sauce + microwave rice. One pan. 15 min. Rotate sauce: teriyaki → peanut satay → soy ginger.",
+    ambarPortion: ["150g tofu", "1 rice pouch", "1.5 cups veg"],
+    camPortion: ["250g tofu", "2 rice pouches", "2 cups veg"],
+    tip: null, swapType: "dinner",
+  },
+  {
+    tag: "Dinner — Fri & Sat · Vietnamese", name: "Vermicelli noodle bowl",
+    ambarKcal: 540, camKcal: 880,
+    desc: "Soak vermicelli in boiling water. Bag salad + cucumber + shredded carrot + tofu. Dress: soy + lime + chilli or bottled Vietnamese dressing. 10 min.",
+    ambarPortion: ["60g dry noodles", "100g tofu", "big handful salad"],
+    camPortion: ["100g dry noodles", "200g tofu", "big handful salad"],
+    tip: null, swapType: "dinner",
+  },
+  {
+    tag: "Cam's snacks — daily", name: "Nuts + fruit",
+    ambarKcal: null, camKcal: 350,
+    desc: "Cam needs ~350 extra kcal per day beyond meals. A handful of mixed nuts and a couple of pieces of fruit. No prep.",
+    ambarPortion: ["Not needed", "on this plan"],
+    camPortion: ["40g mixed nuts", "+ 1–2 pieces fruit"],
+    tip: null, swapType: null,
+  },
+];
+
+const WEEK = [
+  { d: "Mon", meal: "Pasta", cls: "pasta" },
+  { d: "Tue", meal: "Pasta", cls: "pasta" },
+  { d: "Wed", meal: "Stir", cls: "stir" },
+  { d: "Thu", meal: "Stir", cls: "stir" },
+  { d: "Fri", meal: "Viet", cls: "viet" },
+  { d: "Sat", meal: "Viet", cls: "viet" },
+  { d: "Sun", meal: "Free", cls: "free" },
+];
+
+const css = `
+  @import url('https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Space+Mono:wght@400;700&display=swap');
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  .app { background: #F7F5F2; color: #1C1C1A; font-family: 'Space Mono', monospace; min-height: 100vh; max-width: 480px; margin: 0 auto; }
+  .header { padding: 2rem 1.25rem 0; background: #F7F5F2; border-bottom: 1px solid rgba(28,28,26,0.12); position: sticky; top: 0; z-index: 50; }
+  .wordmark { font-size: 0.5rem; letter-spacing: 0.35em; text-transform: uppercase; color: #9A9690; margin-bottom: 0.25rem; }
+  .title { font-family: 'Instrument Serif', serif; font-size: 2rem; font-weight: 400; font-style: italic; line-height: 1; margin-bottom: 0.15rem; color: #1C1C1A; }
+  .subtitle { font-size: 0.5rem; letter-spacing: 0.18em; text-transform: uppercase; color: #9A9690; padding-bottom: 1rem; }
+  .tabs { display: grid; grid-template-columns: repeat(3,1fr); border-top: 1px solid rgba(28,28,26,0.12); margin: 0 -1.25rem; }
+  .tab { background: none; border: none; border-right: 1px solid rgba(28,28,26,0.12); color: #9A9690; font-family: 'Space Mono', monospace; font-size: 0.52rem; letter-spacing: 0.15em; text-transform: uppercase; padding: 0.65rem 0; cursor: pointer; }
+  .tab:last-child { border-right: none; }
+  .tab.active { color: #1C1C1A; background: #EDEAE5; }
+  .person-toggle { display: grid; grid-template-columns: 1fr 1fr; border-bottom: 1px solid rgba(28,28,26,0.12); }
+  .p-btn { background: none; border: none; border-right: 1px solid rgba(28,28,26,0.12); padding: 1rem 1.25rem; font-family: 'Instrument Serif', serif; font-size: 1.1rem; color: #9A9690; cursor: pointer; text-align: left; display: flex; flex-direction: column; gap: 2px; }
+  .p-btn:last-child { border-right: none; }
+  .p-btn.active { color: #1C1C1A; background: #EDEAE5; }
+  .p-sub { font-family: 'Space Mono', monospace; font-size: 0.5rem; letter-spacing: 0.1em; color: #9A9690; }
+  .p-btn.active.ambar .p-sub { color: #8B6914; }
+  .p-btn.active.cam .p-sub { color: #2B5C7B; }
+  .sec-label { font-size: 0.5rem; letter-spacing: 0.2em; text-transform: uppercase; color: #9A9690; padding: 1.1rem 1.25rem 0.45rem; border-bottom: 1px solid rgba(28,28,26,0.12); }
+  .week-strip { display: grid; grid-template-columns: repeat(7,1fr); border-bottom: 1px solid rgba(28,28,26,0.12); }
+  .wday { padding: 0.65rem 0; text-align: center; border-right: 1px solid rgba(28,28,26,0.12); }
+  .wday:last-child { border-right: none; }
+  .wd { font-size: 0.44rem; letter-spacing: 0.1em; text-transform: uppercase; color: #9A9690; display: block; }
+  .wm { font-size: 0.54rem; margin-top: 3px; display: block; color: #1C1C1A; }
+  .wday.pasta .wm { color: #8B6914; }
+  .wday.stir .wm { color: #2B5C7B; }
+  .wday.viet .wm { color: #2B7B4A; }
+  .wday.free .wm { color: #9A9690; }
+  .meal-row { border-bottom: 1px solid rgba(28,28,26,0.12); }
+  .meal-head { display: flex; align-items: baseline; justify-content: space-between; padding: 1rem 1.25rem; gap: 0.75rem; cursor: pointer; }
+  .meal-head:hover { background: #EDEAE5; }
+  .meal-tag { font-size: 0.46rem; letter-spacing: 0.18em; text-transform: uppercase; color: #9A9690; margin-bottom: 4px; }
+  .meal-name { font-family: 'Instrument Serif', serif; font-size: 1.1rem; line-height: 1.2; color: #1C1C1A; }
+  .meal-kcal { font-size: 0.58rem; color: #9A9690; white-space: nowrap; }
+  .meal-body { padding: 0 1.25rem 1rem; border-top: 1px solid rgba(28,28,26,0.12); }
+  .meal-desc { font-family: 'Instrument Serif', serif; font-size: 0.95rem; color: #6B6860; line-height: 1.75; padding-top: 0.85rem; }
+  .portion-block { display: grid; grid-template-columns: 1fr 1fr; border: 1px solid rgba(28,28,26,0.12); margin-top: 0.85rem; }
+  .p-col { padding: 0.8rem 0.9rem; border-right: 1px solid rgba(28,28,26,0.12); }
+  .p-col:last-child { border-right: none; }
+  .p-who { font-size: 0.48rem; letter-spacing: 0.18em; text-transform: uppercase; margin-bottom: 6px; }
+  .p-who.a { color: #8B6914; }
+  .p-who.c { color: #2B5C7B; }
+  .p-amount { font-family: 'Instrument Serif', serif; font-size: 0.95rem; line-height: 1.5; color: #1C1C1A; }
+  .p-kcal { font-size: 0.52rem; color: #9A9690; margin-top: 4px; }
+  .meal-tip { margin-top: 0.8rem; font-size: 0.56rem; color: #6B6860; line-height: 1.6; padding-left: 0.7rem; border-left: 2px solid rgba(28,28,26,0.15); }
+  .swap-btn { margin-top: 0.85rem; background: none; border: 1px solid rgba(28,28,26,0.15); color: #9A9690; font-family: 'Space Mono', monospace; font-size: 0.5rem; letter-spacing: 0.12em; text-transform: uppercase; padding: 0.6rem 0.9rem; cursor: pointer; width: 100%; text-align: left; }
+  .swap-btn:hover { color: #1C1C1A; border-color: rgba(28,28,26,0.35); background: #EDEAE5; }
+  .swapped-tag { display: inline-block; font-size: 0.44rem; letter-spacing: 0.12em; text-transform: uppercase; color: #2B5C7B; border: 1px solid rgba(43,92,123,0.3); padding: 2px 6px; margin-bottom: 4px; }
+  .cal-hero { padding: 1.25rem; border-bottom: 1px solid rgba(28,28,26,0.12); }
+  .cal-big { font-family: 'Instrument Serif', serif; font-size: 4rem; font-style: italic; line-height: 1; letter-spacing: -0.03em; color: #1C1C1A; }
+  .cal-sublabel { font-size: 0.5rem; letter-spacing: 0.2em; text-transform: uppercase; color: #9A9690; margin-top: 5px; }
+  .cal-cells { display: grid; grid-template-columns: repeat(3,1fr); border-bottom: 1px solid rgba(28,28,26,0.12); }
+  .cal-cell { padding: 0.9rem 1.1rem; border-right: 1px solid rgba(28,28,26,0.12); }
+  .cal-cell:last-child { border-right: none; }
+  .cc-label { font-size: 0.46rem; letter-spacing: 0.15em; text-transform: uppercase; color: #9A9690; margin-bottom: 5px; }
+  .cc-val { font-family: 'Instrument Serif', serif; font-size: 1.4rem; color: #1C1C1A; }
+  .cc-sub { font-size: 0.5rem; color: #9A9690; margin-top: 1px; }
+  .mcr { display: flex; align-items: flex-start; gap: 0.6rem; padding: 0.85rem 1.25rem; border-bottom: 1px solid rgba(28,28,26,0.12); }
+  .mcr-meal { font-family: 'Instrument Serif', serif; font-size: 0.9rem; min-width: 72px; padding-top: 1px; color: #1C1C1A; }
+  .mcr-portion { font-size: 0.56rem; color: #6B6860; flex: 1; line-height: 1.65; }
+  .mcr-kcal { font-size: 0.68rem; font-weight: 700; white-space: nowrap; color: #1C1C1A; }
+  .mcr-bar-wrap { height: 1px; margin: 0 1.25rem; background: rgba(28,28,26,0.1); }
+  .mcr-bar-fill { height: 1px; }
+  .mcr-total { display: flex; justify-content: space-between; padding: 0.8rem 1.25rem; border-bottom: 1px solid rgba(28,28,26,0.12); }
+  .mcr-total-label { font-family: 'Instrument Serif', serif; font-size: 0.9rem; font-style: italic; color: #9A9690; }
+  .mcr-total-val { font-size: 0.68rem; font-weight: 700; color: #1C1C1A; }
+  .shop-subtabs { display: grid; grid-template-columns: 1fr 1fr 1fr; border-bottom: 1px solid rgba(28,28,26,0.12); }
+  .shop-subtab { background: none; border: none; border-right: 1px solid rgba(28,28,26,0.12); color: #9A9690; font-family: 'Space Mono', monospace; font-size: 0.5rem; letter-spacing: 0.12em; text-transform: uppercase; padding: 0.6rem 0; cursor: pointer; text-align: center; }
+  .shop-subtab:last-child { border-right: none; }
+  .shop-subtab.active { color: #1C1C1A; background: #EDEAE5; }
+  .woolies-badge { font-size: 0.42rem; letter-spacing: 0.1em; text-transform: uppercase; color: #9A9690; border: 1px solid rgba(28,28,26,0.12); padding: 2px 6px; margin-left: 6px; vertical-align: middle; }
+  .shop-top { display: flex; align-items: center; justify-content: space-between; padding: 1rem 1.25rem; border-bottom: 1px solid rgba(28,28,26,0.12); }
+  .shop-prog { font-size: 0.54rem; letter-spacing: 0.12em; text-transform: uppercase; color: #9A9690; }
+  .shop-reset { background: none; border: none; font-family: 'Space Mono', monospace; font-size: 0.5rem; letter-spacing: 0.1em; text-transform: uppercase; color: #9A9690; cursor: pointer; }
+  .shop-reset:hover { color: #1C1C1A; }
+  .prog-line { height: 1px; background: rgba(28,28,26,0.1); }
+  .prog-done { height: 1px; background: #1C1C1A; transition: width 0.3s; }
+  .shop-cat { font-size: 0.48rem; letter-spacing: 0.2em; text-transform: uppercase; color: #9A9690; padding: 1rem 1.25rem 0.35rem; display: flex; align-items: center; justify-content: space-between; }
+  .shop-cat-swapped { font-size: 0.42rem; color: #2B5C7B; letter-spacing: 0.08em; }
+  .shop-item { display: flex; align-items: center; gap: 0.85rem; padding: 0.75rem 1.25rem; border-bottom: 1px solid rgba(28,28,26,0.08); cursor: pointer; }
+  .shop-item:hover { background: #EDEAE5; }
+  .shop-item.checked { opacity: 0.35; }
+  .shop-item.checked .item-name { text-decoration: line-through; }
+  .chk { width: 12px; height: 12px; border: 1px solid rgba(28,28,26,0.25); flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
+  .shop-item.checked .chk { background: #1C1C1A; border-color: #1C1C1A; }
+  .item-name { font-family: 'Instrument Serif', serif; font-size: 0.95rem; flex: 1; color: #1C1C1A; }
+  .item-note { font-size: 0.54rem; color: #9A9690; }
+  .modal-bg { position: fixed; inset: 0; background: rgba(28,28,26,0.5); z-index: 100; display: flex; flex-direction: column; justify-content: flex-end; }
+  .modal { background: #F7F5F2; border-top: 1px solid rgba(28,28,26,0.2); width: 100%; max-width: 480px; margin: 0 auto; max-height: 85vh; display: flex; flex-direction: column; }
+  .modal-header { padding: 1.5rem 1.25rem 1rem; border-bottom: 1px solid rgba(28,28,26,0.12); flex-shrink: 0; }
+  .modal-eyebrow { font-size: 0.48rem; letter-spacing: 0.2em; text-transform: uppercase; color: #9A9690; margin-bottom: 0.3rem; }
+  .modal-heading { font-family: 'Instrument Serif', serif; font-size: 1.15rem; font-style: italic; color: #1C1C1A; }
+  .modal-filter { display: flex; gap: 6px; padding: 0.75rem 1.25rem; border-bottom: 1px solid rgba(28,28,26,0.12); flex-shrink: 0; overflow-x: auto; }
+  .filter-pill { background: none; border: 1px solid rgba(28,28,26,0.15); color: #9A9690; font-family: 'Space Mono', monospace; font-size: 0.46rem; letter-spacing: 0.1em; text-transform: uppercase; padding: 0.4rem 0.75rem; cursor: pointer; white-space: nowrap; border-radius: 20px; }
+  .filter-pill.active { border-color: #1C1C1A; color: #1C1C1A; }
+  .recipe-list { overflow-y: auto; flex: 1; }
+  .recipe-item { padding: 1rem 1.25rem; border-bottom: 1px solid rgba(28,28,26,0.08); cursor: pointer; }
+  .recipe-item:hover { background: #EDEAE5; }
+  .recipe-item.selected { background: #EDEAE5; border-left: 2px solid #1C1C1A; }
+  .recipe-item.original { border-left: 2px solid #8B6914; }
+  .recipe-original-tag { font-size: 0.44rem; letter-spacing: 0.15em; text-transform: uppercase; color: #8B6914; margin-bottom: 4px; }
+  .recipe-name { font-family: 'Instrument Serif', serif; font-size: 1rem; margin-bottom: 3px; color: #1C1C1A; }
+  .recipe-desc { font-size: 0.56rem; color: #6B6860; line-height: 1.6; }
+  .recipe-kcal { font-size: 0.52rem; color: #9A9690; margin-top: 4px; }
+  .modal-footer { padding: 1rem 1.25rem; border-top: 1px solid rgba(28,28,26,0.12); display: flex; gap: 7px; flex-shrink: 0; }
+  .btn-cancel { background: none; border: 1px solid rgba(28,28,26,0.15); color: #9A9690; font-family: 'Space Mono', monospace; font-size: 0.5rem; letter-spacing: 0.1em; text-transform: uppercase; padding: 0.65rem 0.9rem; cursor: pointer; }
+  .btn-use { flex: 1; background: #1C1C1A; color: #F7F5F2; border: none; font-family: 'Space Mono', monospace; font-size: 0.5rem; letter-spacing: 0.1em; text-transform: uppercase; padding: 0.65rem 0.9rem; cursor: pointer; }
+  .btn-use:disabled { opacity: 0.25; cursor: default; }
+`;
+
+function MealRow({ meal, person, onSwap, swappedMeal }) {
+  const [open, setOpen] = useState(false);
+  const active = swappedMeal || meal;
+  const kcal = person === "ambar" ? active.ambarKcal : active.camKcal;
+  const isSwapped = !!swappedMeal;
+  // Use swapped recipe's portions if available, otherwise fall back to original meal portions
+  const ambarPortion = active.ambarPortion || meal.ambarPortion;
+  const camPortion = active.camPortion || meal.camPortion;
+  return (
+    <div className="meal-row">
+      <div className="meal-head" onClick={() => setOpen(o => !o)}>
+        <div>
+          {isSwapped && <div className="swapped-tag">swapped</div>}
+          <div className="meal-tag">{meal.tag}</div>
+          <div className="meal-name">{active.name}</div>
+        </div>
+        <div className="meal-kcal">{kcal ? `${kcal.toLocaleString()} kcal` : "—"}</div>
+      </div>
+      {open && (
+        <div className="meal-body">
+          <p className="meal-desc">{active.desc}</p>
+          <div className="portion-block">
+            <div className="p-col">
+              <div className="p-who a">Ambar</div>
+              <div className="p-amount">{ambarPortion.map((l,i) => <span key={i}>{l}{i < ambarPortion.length-1 && <br/>}</span>)}</div>
+              <div className="p-kcal">{active.ambarKcal ? `~${active.ambarKcal} kcal` : "—"}</div>
+            </div>
+            <div className="p-col">
+              <div className="p-who c">Cam</div>
+              <div className="p-amount">{camPortion.map((l,i) => <span key={i}>{l}{i < camPortion.length-1 && <br/>}</span>)}</div>
+              <div className="p-kcal">{active.camKcal ? `~${active.camKcal} kcal` : "—"}</div>
+            </div>
+          </div>
+          {meal.tip && !isSwapped && <div className="meal-tip">{meal.tip}</div>}
+          {meal.swapType && (
+            <button className="swap-btn" onClick={() => onSwap(meal.swapType, meal)}>
+              {isSwapped ? "✦ swap again" : "✦ swap this meal"}
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+export default function App() {
+  const [tab, setTab] = useState("plan");
+  const [planPerson, setPlanPerson] = useState("ambar");
+  const [calPerson, setCalPerson] = useState("ambar");
+  const [checked, setChecked] = useState(new Set());
+  const [modal, setModal] = useState(null);
+  const [selectedRecipe, setSelectedRecipe] = useState(null);
+  const [filterType, setFilterType] = useState("all");
+  const [swaps, setSwaps] = useState({});
+  const [shopView, setShopView] = useState("meal"); // "meal" | "woolies"
+
+  // Build dynamic shopping list from active meals
+  const shopSections = useMemo(() => {
+    const sections = [];
+    MEALS_DATA.forEach(meal => {
+      const swapped = swaps[meal.tag];
+      const ingredients = swapped ? swapped.ingredients : BASE_INGREDIENTS[meal.tag] || [];
+      if (ingredients.length === 0) return;
+      sections.push({
+        cat: swapped ? swapped.name : meal.name,
+        isSwapped: !!swapped,
+        items: ingredients,
+      });
+    });
+    // Add pantry section
+    sections.push({ cat: "Pantry staples", isSwapped: false, items: PANTRY });
+    return sections;
+  }, [swaps]);
+
+  const totalShop = shopSections.reduce((a, s) => a + s.items.length, 0);
+
+  // Build deduplicated Woolworths category view
+  const wooliesSections = useMemo(() => {
+    const seen = new Set();
+    const catMap = {};
+    shopSections.forEach(sec => {
+      sec.items.forEach(item => {
+        if (seen.has(item.name)) return;
+        seen.add(item.name);
+        const cat = WOOLIES_CATS[item.name] || "Other";
+        if (!catMap[cat]) catMap[cat] = [];
+        catMap[cat].push(item);
+      });
+    });
+    return WOOLIES_CAT_ORDER
+      .map(cat => ({ cat, items: catMap[cat] || [] }))
+      .filter(s => s.items.length > 0);
+  }, [shopSections]);
+
+  const colesSections = useMemo(() => {
+    const seen = new Set();
+    const catMap = {};
+    shopSections.forEach(sec => {
+      sec.items.forEach(item => {
+        if (seen.has(item.name)) return;
+        seen.add(item.name);
+        const cat = COLES_CATS[item.name] || "Other";
+        if (!catMap[cat]) catMap[cat] = [];
+        catMap[cat].push(item);
+      });
+    });
+    return COLES_CAT_ORDER
+      .map(cat => ({ cat, items: catMap[cat] || [] }))
+      .filter(s => s.items.length > 0);
+  }, [shopSections]);
+
+  function toggleItem(key) {
+    setChecked(prev => {
+      const next = new Set(prev);
+      next.has(key) ? next.delete(key) : next.add(key);
+      return next;
+    });
+  }
+
+  function openSwap(type, originalMeal) {
+    setModal({ type, originalMeal });
+    setSelectedRecipe(null);
+    setFilterType(type);
+  }
+
+  function acceptSwap() {
+    if (modal && selectedRecipe) {
+      if (selectedRecipe._isOriginal) {
+        // Restore original — just remove the swap entry
+        setSwaps(prev => {
+          const next = { ...prev };
+          delete next[modal.originalMeal.tag];
+          return next;
+        });
+      } else {
+        setSwaps(prev => ({ ...prev, [modal.originalMeal.tag]: selectedRecipe }));
+      }
+      // Clear checked items for this meal since ingredients changed
+      setChecked(prev => {
+        const next = new Set(prev);
+        const oldIngredients = BASE_INGREDIENTS[modal.originalMeal.tag] || [];
+        oldIngredients.forEach(i => next.delete(`${modal.originalMeal.tag}:${i.name}`));
+        return next;
+      });
+    }
+    setModal(null);
+  }
+
+  const isCurrentlySwapped = modal && !!swaps[modal?.originalMeal?.tag];
+
+  // Build the original meal as a recipe-shaped object for the list
+  const originalAsRecipe = modal ? {
+    _isOriginal: true,
+    name: modal.originalMeal.name,
+    desc: modal.originalMeal.desc,
+    ambarKcal: modal.originalMeal.ambarKcal,
+    camKcal: modal.originalMeal.camKcal,
+    ambarPortion: modal.originalMeal.ambarPortion,
+    camPortion: modal.originalMeal.camPortion,
+  } : null;
+
+  const allRecipes = [
+    ...(isCurrentlySwapped && originalAsRecipe ? [originalAsRecipe] : []),
+    ...(filterType === "all"
+      ? [...SWAP_LIBRARY.breakfast, ...SWAP_LIBRARY.lunch, ...SWAP_LIBRARY.dinner]
+      : SWAP_LIBRARY[filterType] || [])
+  ];
+
+  const calD = PEOPLE[calPerson];
+  const calTotal = calD.meals.reduce((a, m) => a + m.kcal, 0);
+  const calGap = calD.target - calTotal;
+  const barColor = calPerson === "ambar" ? "#E8D5B0" : "#B0C8E8";
+
+  return (
+    <>
+      <style>{css}</style>
+      <div className="app">
+        <div className="header">
+          <div className="wordmark">Ambar & Cam</div>
+          <div className="title">Nourish</div>
+          <div className="subtitle">vegan · simple · weekly</div>
+          <div className="tabs">
+            {["plan","calories","shopping"].map(t => (
+              <button key={t} className={`tab${tab===t?" active":""}`} onClick={() => setTab(t)}>{t}</button>
+            ))}
+          </div>
+        </div>
+
+        {/* PLAN */}
+        {tab === "plan" && (
+          <div>
+            <div className="person-toggle">
+              <button className={`p-btn ambar${planPerson==="ambar"?" active":""}`} onClick={() => setPlanPerson("ambar")}>
+                Ambar<span className="p-sub">1,780 kcal target</span>
+              </button>
+              <button className={`p-btn cam${planPerson==="cam"?" active":""}`} onClick={() => setPlanPerson("cam")}>
+                Cam<span className="p-sub">3,050 kcal target</span>
+              </button>
+            </div>
+            <div className="sec-label">This week</div>
+            <div className="week-strip">
+              {WEEK.map(w => (
+                <div key={w.d} className={`wday ${w.cls}`}>
+                  <span className="wd">{w.d}</span>
+                  <span className="wm">{w.meal}</span>
+                </div>
+              ))}
+            </div>
+            {MEALS_DATA.map((meal, i) => (
+              <MealRow key={i} meal={meal} person={planPerson} onSwap={openSwap} swappedMeal={swaps[meal.tag]} />
+            ))}
+          </div>
+        )}
+
+        {/* CALORIES */}
+        {tab === "calories" && (
+          <div>
+            <div className="person-toggle">
+              <button className={`p-btn ambar${calPerson==="ambar"?" active":""}`} onClick={() => setCalPerson("ambar")}>
+                Ambar<span className="p-sub">gentle deficit</span>
+              </button>
+              <button className={`p-btn cam${calPerson==="cam"?" active":""}`} onClick={() => setCalPerson("cam")}>
+                Cam<span className="p-sub">maintenance</span>
+              </button>
+            </div>
+            <div className="cal-hero">
+              <div className="cal-big">{calD.target.toLocaleString()}</div>
+              <div className="cal-sublabel">kcal daily target · {calD.label}</div>
+            </div>
+            <div className="cal-cells">
+              <div className="cal-cell"><div className="cc-label">From meals</div><div className="cc-val">{calTotal.toLocaleString()}</div><div className="cc-sub">per day</div></div>
+              <div className="cal-cell"><div className="cc-label">Remaining</div><div className="cc-val" style={{color: calGap < -100 ? "#E88080" : ""}}>{Math.abs(calGap).toLocaleString()}</div><div className="cc-sub">{calGap >= 0 ? "buffer" : "over"}</div></div>
+              <div className="cal-cell"><div className="cc-label">Protein est.</div><div className="cc-val">{calD.protein}</div><div className="cc-sub">from plan</div></div>
+            </div>
+            {calD.meals.map((m, i) => (
+              <div key={i}>
+                <div className="mcr">
+                  <div className="mcr-meal">{m.name}</div>
+                  <div className="mcr-portion">{m.portion}</div>
+                  <div className="mcr-kcal">{m.kcal.toLocaleString()}</div>
+                </div>
+                <div className="mcr-bar-wrap">
+                  <div className="mcr-bar-fill" style={{width:`${Math.min(100,Math.round(m.kcal/calD.target*100))}%`, background: barColor}} />
+                </div>
+              </div>
+            ))}
+            <div className="mcr-total">
+              <span className="mcr-total-label">total</span>
+              <span className="mcr-total-val" style={{color: calGap < -100 ? "#E88080" : ""}}>{calTotal.toLocaleString()} kcal</span>
+            </div>
+          </div>
+        )}
+
+        {/* SHOPPING — dynamic */}
+        {tab === "shopping" && (
+          <div>
+            <div className="shop-top">
+              <span className="shop-prog">{checked.size} of {totalShop} items</span>
+              <button className="shop-reset" onClick={() => setChecked(new Set())}>Reset</button>
+            </div>
+            <div className="prog-line">
+              <div className="prog-done" style={{width:`${totalShop > 0 ? Math.round(checked.size/totalShop*100) : 0}%`}} />
+            </div>
+            <div className="shop-subtabs">
+              <button className={`shop-subtab${shopView==="meal"?" active":""}`} onClick={() => setShopView("meal")}>By meal</button>
+              <button className={`shop-subtab${shopView==="woolies"?" active":""}`} onClick={() => setShopView("woolies")}>Woolworths</button>
+              <button className={`shop-subtab${shopView==="coles"?" active":""}`} onClick={() => setShopView("coles")}>Coles</button>
+            </div>
+
+            {shopView === "meal" && shopSections.map(sec => (
+              <div key={sec.cat}>
+                <div className="shop-cat">
+                  <span>{sec.cat}</span>
+                  {sec.isSwapped && <span className="shop-cat-swapped">swapped</span>}
+                </div>
+                {sec.items.map(item => {
+                  const key = `${sec.cat}:${item.name}`;
+                  return (
+                    <div key={key} className={`shop-item${checked.has(key)?" checked":""}`} onClick={() => toggleItem(key)}>
+                      <div className="chk">
+                        {checked.has(key) && (
+                          <svg width="7" height="7" viewBox="0 0 7 7" fill="none">
+                            <path d="M1 3.5L2.8 5.5L6 1.5" stroke="#F7F5F2" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/>
+                          </svg>
+                        )}
+                      </div>
+                      <span className="item-name">{item.name}</span>
+                      {item.note && <span className="item-note">{item.note}</span>}
+                    </div>
+                  );
+                })}
+              </div>
+            ))}
+
+            {(shopView === "woolies" || shopView === "coles") && (shopView === "woolies" ? wooliesSections : colesSections).map(sec => (
+              <div key={sec.cat}>
+                <div className="shop-cat"><span>{sec.cat}</span></div>
+                {sec.items.map(item => {
+                  const key = `${shopView}:${item.name}`;
+                  return (
+                    <div key={key} className={`shop-item${checked.has(key)?" checked":""}`} onClick={() => toggleItem(key)}>
+                      <div className="chk">
+                        {checked.has(key) && (
+                          <svg width="7" height="7" viewBox="0 0 7 7" fill="none">
+                            <path d="M1 3.5L2.8 5.5L6 1.5" stroke="#F7F5F2" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/>
+                          </svg>
+                        )}
+                      </div>
+                      <span className="item-name">{item.name}</span>
+                      {item.note && <span className="item-note">{item.note}</span>}
+                    </div>
+                  );
+                })}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* SWAP MODAL */}
+        {modal && (
+          <div className="modal-bg" onClick={e => e.target.className === "modal-bg" && setModal(null)}>
+            <div className="modal">
+              <div className="modal-header">
+                <div className="modal-eyebrow">Swap meal</div>
+                <div className="modal-heading">choose a replacement</div>
+              </div>
+              <div className="modal-filter">
+                {["all","breakfast","lunch","dinner"].map(f => (
+                  <button key={f} className={`filter-pill${filterType===f?" active":""}`} onClick={() => setFilterType(f)}>{f}</button>
+                ))}
+              </div>
+              <div className="recipe-list">
+                {allRecipes.map((r, i) => (
+                  <div key={i} className={`recipe-item${selectedRecipe===r?" selected":""}${r._isOriginal?" original":""}`} onClick={() => setSelectedRecipe(r)}>
+                    {r._isOriginal && <div className="recipe-original-tag">↩ original</div>}
+                    <div className="recipe-name">{r.name}</div>
+                    <div className="recipe-desc">{r.desc}</div>
+                    <div className="recipe-kcal">~{r.ambarKcal} kcal (Ambar) · ~{r.camKcal} kcal (Cam)</div>
+                  </div>
+                ))}
+              </div>
+              <div className="modal-footer">
+                <button className="btn-cancel" onClick={() => setModal(null)}>Cancel</button>
+                <button className="btn-use" disabled={!selectedRecipe} onClick={acceptSwap}>
+                  {selectedRecipe ? `Use "${selectedRecipe.name}" →` : "Select a meal →"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </>
+  );
+}
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>
